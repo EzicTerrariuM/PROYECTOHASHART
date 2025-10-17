@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+qrcode[pil]
+reportlab
+PyPDF2
+opencv-python
+python-multipart
