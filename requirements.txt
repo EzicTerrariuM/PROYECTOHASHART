@@ -1,7 +1,10 @@
 fastapi
 uvicorn
-qrcode[pil]
-reportlab
-PyPDF2
+sqlalchemy
+psycopg2-binary
+python-dotenv
+qrcode
 opencv-python
-python-multipart
+PyPDF2
+reportlab
+dotenv

@@ -1,7 +1,6 @@
-from fastapi import FastAPI, File, UploadFile, Depends
+from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
 import hashlib
 import cv2
 import qrcode
@@ -12,23 +11,20 @@ from io import BytesIO
 import tempfile
 import os
 
-import models, schemas, crud
-from database import engine, get_db
-
-models.Base.metadata.create_all(bind=engine)
-
-app = FastAPI(title="Sistema de Verificación de Hashes + PDF")
+# --- Crear la app ---
+app = FastAPI(title="PDF + QR Generator API")
 
 # --- Configurar CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Puedes restringirlo si quieres
+    allow_origins=["*"],  # Puedes restringir a ["http://localhost:3000"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # --- Funciones auxiliares ---
+
 def get_pdf_sha3_hash(file_path):
     """Genera un hash SHA3-256 del PDF"""
     sha3 = hashlib.sha3_256()
@@ -57,9 +53,9 @@ def generate_sha3_hash(data):
     sha3.update(data.encode())
     return sha3.hexdigest()
 
-# --- Endpoint para crear hash y guardar en BD ---
-@app.post("/crear_hash/")
-async def crear_hash(pdf: UploadFile = File(...), image: UploadFile = File(...), db: Session = Depends(get_db)):
+# --- Endpoint principal ---
+@app.post("/process")
+async def process(pdf: UploadFile = File(...), image: UploadFile = File(...)):
     try:
         # Guardar archivos temporales
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_tmp:
@@ -103,46 +99,13 @@ async def crear_hash(pdf: UploadFile = File(...), image: UploadFile = File(...),
         with open(output_filename, "wb") as f:
             writer.write(f)
 
-        # Guardar en la base de datos
-        archivo_data = schemas.ArchivoHashCreate(
-            nombre_archivo=pdf.filename,
-            hash_base=pdf_hash,
-            salt=salt,
-            hash_con_salt=final_hash
-        )
-        crud.crear_archivo(db, archivo_data)
-
-        # Devolver el PDF con el QR generado
         return FileResponse(output_filename, filename="PDF_with_QR.pdf")
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-# --- Endpoint para verificar archivo + imagen ---
-@app.post("/verificar_hash/")
-async def verificar_hash(pdf: UploadFile = File(...), image: UploadFile = File(...), db: Session = Depends(get_db)):
-    try:
-        # Guardar archivos temporales
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_tmp:
-            pdf_tmp.write(await pdf.read())
-            pdf_path = pdf_tmp.name
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as img_tmp:
-            img_tmp.write(await image.read())
-            image_path = img_tmp.name
-
-        # Recalcular el hash
-        pdf_hash = get_pdf_sha3_hash(pdf_path)
-        salt = get_deterministic_salt(image_path)
-        combined_data = pdf_hash + salt
-        final_hash = generate_sha3_hash(combined_data)
-
-        # Buscar en BD
-        archivo_db = crud.obtener_por_hash(db, final_hash)
-        if archivo_db:
-            return {"verificado": True, "mensaje": "El archivo coincide con un registro existente.", "hash": final_hash}
-        else:
-            return {"verificado": False, "mensaje": "El archivo no coincide con ningún registro.", "hash": final_hash}
-
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+# --- Mantener servidor activo ---
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
