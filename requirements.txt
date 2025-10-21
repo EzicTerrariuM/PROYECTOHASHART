@@ -1,10 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 sqlalchemy
 psycopg2-binary
 python-dotenv
 qrcode
-opencv-python
+opencv-python-headless
 PyPDF2
 reportlab
-dotenv
