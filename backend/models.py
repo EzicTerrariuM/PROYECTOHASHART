@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP
 from sqlalchemy.orm import relationship
-from database import Base
+from backend.database import Base
 
 class ArchivoHash(Base):
     __tablename__ = "archivos_hash"

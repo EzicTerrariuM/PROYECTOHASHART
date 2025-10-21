@@ -1,16 +1,18 @@
+import os
+import tempfile
+import hashlib
+from io import BytesIO
+
+import cv2
+import qrcode
 from fastapi import FastAPI, File, UploadFile, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-import hashlib
-import cv2
-import qrcode
 from PyPDF2 import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from io import BytesIO
-import tempfile
-import os
+
 from backend import models, schemas, crud
 from backend.database import engine, get_db
 

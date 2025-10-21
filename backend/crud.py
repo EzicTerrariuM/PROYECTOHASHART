@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-import models, schemas
+from backend import models, schemas
 
 def crear_archivo(db: Session, archivo: schemas.ArchivoHashCreate):
     nuevo = models.ArchivoHash(**archivo.dict())
