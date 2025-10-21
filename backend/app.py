@@ -12,7 +12,7 @@ from io import BytesIO
 import tempfile
 import os
 from backend import models, schemas, crud
-from database import engine, get_db
+from backend.database import engine, get_db
 
 models.Base.metadata.create_all(bind=engine)
 
