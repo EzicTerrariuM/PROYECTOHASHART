@@ -1,20 +1,23 @@
-import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
+import os
 
-load_dotenv()  # Carga el .env
+load_dotenv()
 
-DATABASE_URL = "DATABASE_URL"
+# Leer variable del entorno
+DATABASE_URL = os.getenv("DATABASE_URL")
 
+# 🔥 Si Railway da el formato sin "psycopg2", lo arreglamos automáticamente
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+
+# 🚨 Validar que la URL exista
+if not DATABASE_URL:
+    raise ValueError("❌ DATABASE_URL no está configurada o está vacía")
+
+# Crear motor de conexión
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
-
-# Dependencia para obtener la sesión
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
