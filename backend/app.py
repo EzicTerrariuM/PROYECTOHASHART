@@ -11,8 +11,7 @@ from reportlab.lib.pagesizes import letter
 from io import BytesIO
 import tempfile
 import os
-
-import models, schemas, crud
+from backend import models, schemas, crud
 from database import engine, get_db
 
 models.Base.metadata.create_all(bind=engine)
