@@ -1,55 +1,58 @@
-from datetime import datetime
 from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
 
-# ---------- ARCHIVOS HASH ----------
-class ArchivoHashBase(BaseModel):
-    nombre_archivo: str
-    hash_base: str
-    salt: str
-    hash_con_salt: str
+# ------------------------------
+# Schemas para Documentos
+# ------------------------------
+class DocumentoBase(BaseModel):
+    nombre: str
+    hash_pdf: str
+    imagen_asociada: str
 
-
-class ArchivoHashCreate(ArchivoHashBase):
-    fecha_creacion: datetime = datetime.now()
-
-
-class ArchivoHash(ArchivoHashBase):
-    id_hash: int
-    fecha_creacion: datetime
-
-    class Config:
-        from_attributes = True  # reemplaza orm_mode=True
-
-
-# ---------- ESTADOS ----------
-class EstadoBase(BaseModel):
-    descripcion: str
-
-
-class EstadoCreate(EstadoBase):
+class DocumentoCreate(DocumentoBase):
     pass
 
-
-class Estado(EstadoBase):
-    id_estado: int
+class Documento(DocumentoBase):
+    id: int
+    creado_en: datetime
 
     class Config:
         from_attributes = True
 
 
-# ---------- VERIFICACIONES ----------
+# ------------------------------
+# Schemas para Verificaciones
+# ------------------------------
 class VerificacionBase(BaseModel):
-    id_hash: int
-    id_estado: int
-
+    documento_id: int
+    resultado: bool
 
 class VerificacionCreate(VerificacionBase):
-    fecha_verificacion: datetime = datetime.now()
-
+    pass
 
 class Verificacion(VerificacionBase):
-    id_verificacion: int
+    id: int
     fecha_verificacion: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ------------------------------
+# Schemas para Imagenes
+# ------------------------------
+class ImagenBase(BaseModel):
+    nombre: str
+    datos: bytes
+    salt: Optional[str] = None
+
+class ImagenCreate(ImagenBase):
+    pass
+
+class Imagen(ImagenBase):
+    id: int
+    created_at: datetime
 
     class Config:
         from_attributes = True
