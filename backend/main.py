@@ -14,6 +14,12 @@ from backend.database import get_db
 
 app = FastAPI()
 
+origins = [
+    "http://localhost:3000",  # React local
+    "https://tu-dominio-frontend.com",  # tu frontend en producción
+    "*",  # opcional, permite todos (útil para pruebas)
+]
+
 @app.post("/registrar_pdf/")
 async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
