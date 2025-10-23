@@ -9,19 +9,75 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 import qrcode
 from PIL import Image
+from PyPDF2 import PdfReader, PdfWriter
 from backend.utils import generate_pdf_hash
 from backend.database import get_db
 
 app = FastAPI()
 
+def agregar_pagina_qr(pdf_bytes: bytes, qr_url: str, imagen_bytes: bytes) -> bytes:
+    """Agrega una página al PDF con QR, imagen asociada y textos."""
+    # Crear PDF temporal con ReportLab
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    # Título
+    c.setFont("Helvetica-Bold", 20)
+    c.drawCentredString(width / 2, height - 1 * inch, "PROYECTO HASHART")
+
+    # Subtítulo
+    c.setFont("Helvetica", 14)
+    c.drawCentredString(width / 2, height - 1.5 * inch, "PARA VERIFICAR TU DOCUMENTO ESCANEA EL CODIGO QR")
+
+    # Generar QR
+    qr = qrcode.QRCode(box_size=6, border=1)
+    qr.add_data(qr_url)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    qr_io = BytesIO()
+    qr_img.save(qr_io, format="PNG")
+    qr_io.seek(0)
+    qr_pil = Image.open(qr_io)
+    qr_pil.save("temp_qr.png")  # Necesario para drawImage
+    c.drawImage("temp_qr.png", width/2 - 1*inch, height - 3*inch, 2*inch, 2*inch)
+
+    # Imagen asociada
+    imagen_io = BytesIO(imagen_bytes)
+    imagen_pil = Image.open(imagen_io)
+    imagen_pil.thumbnail((2*inch, 2*inch))
+    imagen_pil.save("temp_img.png")
+    c.drawImage("temp_img.png", width/2 - 1*inch, height - 5*inch, 2*inch, 2*inch)
+
+    # Créditos
+    c.setFont("Helvetica", 10)
+    c.drawCentredString(width / 2, 0.5 * inch, "Proyecto de tesis de la Universidad de San Buenaventura")
+    c.drawCentredString(width / 2, 0.3 * inch, "Creado por Juan Campo & Juan Lara")
+
+    c.showPage()
+    c.save()
+
+    # Combinar PDF original con nueva página
+    buffer.seek(0)
+    new_pdf = PdfReader(buffer)
+    original_pdf = PdfReader(BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    for page in original_pdf.pages:
+        writer.add_page(page)
+    for page in new_pdf.pages:
+        writer.add_page(page)
+    output = BytesIO()
+    writer.write(output)
+    output.seek(0)
+    return output.read()
+
 @app.post("/registrar_pdf/")
 async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
-        # Validar que sea un PDF
+        # Validar que sea PDF
         if pdf.content_type != "application/pdf":
             return JSONResponse(content={"error": "El archivo debe ser un PDF"}, status_code=400)
 
-        # Leer PDF y generar hash
         pdf_bytes = await pdf.read()
         pdf_hash = generate_pdf_hash(pdf_bytes)
 
@@ -44,47 +100,17 @@ async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_d
         })
         db.commit()
 
-        # Devolver el PDF como descarga
+        # Crear URL de verificación
+        qr_url = f"https://proyectohashart.up.railway.app/verificar_pdf/"
+
+        # Generar PDF con página extra
+        pdf_final = agregar_pagina_qr(pdf_bytes, qr_url, imagen_asociada[1])
+
         return StreamingResponse(
-            BytesIO(pdf_bytes), 
+            BytesIO(pdf_final),
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename={pdf.filename}"}
         )
-
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
-
-@app.post("/verificar_pdf/")
-async def verificar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_db)):
-    try:
-        # Validar que sea un PDF
-        if pdf.content_type != "application/pdf":
-            return JSONResponse(content={"error": "El archivo debe ser un PDF"}, status_code=400)
-
-        # Leer PDF y generar hash
-        pdf_bytes = await pdf.read()
-        pdf_hash = generate_pdf_hash(pdf_bytes)
-
-        # Buscar el documento en la tabla 'documentos'
-        query_doc = text("SELECT id FROM documentos WHERE hash_pdf = :hash_pdf")
-        result = db.execute(query_doc, {"hash_pdf": pdf_hash}).fetchone()
-
-        if result:
-            documento_id = result[0]
-            resultado = True
-        else:
-            documento_id = None
-            resultado = False
-
-        # Guardar la verificación solo si se encontró el documento
-        if documento_id:
-            insert_verificacion = text(
-                "INSERT INTO verificaciones (documento_id, resultado) VALUES (:documento_id, :resultado)"
-            )
-            db.execute(insert_verificacion, {"documento_id": documento_id, "resultado": resultado})
-            db.commit()
-
-        return JSONResponse(content={"hash": pdf_hash, "valido": resultado})
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
