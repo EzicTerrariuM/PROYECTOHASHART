@@ -11,7 +11,7 @@ import qrcode
 from PIL import Image
 from backend.utils import generate_pdf_hash
 from backend.database import get_db
-
+from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 
 origins = [
@@ -19,6 +19,14 @@ origins = [
     "https://tu-dominio-frontend.com",  # tu frontend en producción
     "*",  # opcional, permite todos (útil para pruebas)
 ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/registrar_pdf/")
 async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_db)):
