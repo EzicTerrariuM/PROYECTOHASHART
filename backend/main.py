@@ -15,22 +15,30 @@ from backend.database import get_db
 
 app = FastAPI()
 
+
 def agregar_pagina_qr(pdf_bytes: bytes, qr_url: str, imagen_bytes: bytes) -> bytes:
-    """Agrega una página al PDF con QR, imagen asociada y textos."""
-    # Crear PDF temporal con ReportLab
+    """
+    Agrega una página centrada al PDF con QR, imagen asociada y textos.
+    """
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
 
+    # Posiciones verticales relativas
+    y_top = height - 1*inch
+    spacing = 0.3*inch
+
     # Título
     c.setFont("Helvetica-Bold", 20)
-    c.drawCentredString(width / 2, height - 1 * inch, "PROYECTO HASHART")
+    c.drawCentredString(width / 2, y_top, "PROYECTO HASHART")
+    y_pos = y_top - spacing - 20
 
     # Subtítulo
     c.setFont("Helvetica", 14)
-    c.drawCentredString(width / 2, height - 1.5 * inch, "PARA VERIFICAR TU DOCUMENTO ESCANEA EL CODIGO QR")
+    c.drawCentredString(width / 2, y_pos, "PARA VERIFICAR TU DOCUMENTO ESCANEA EL CODIGO QR")
+    y_pos -= 2.5*inch
 
-    # Generar QR
+    # QR
     qr = qrcode.QRCode(box_size=6, border=1)
     qr.add_data(qr_url)
     qr.make(fit=True)
@@ -39,15 +47,17 @@ def agregar_pagina_qr(pdf_bytes: bytes, qr_url: str, imagen_bytes: bytes) -> byt
     qr_img.save(qr_io, format="PNG")
     qr_io.seek(0)
     qr_pil = Image.open(qr_io)
-    qr_pil.save("temp_qr.png")  # Necesario para drawImage
-    c.drawImage("temp_qr.png", width/2 - 1*inch, height - 3*inch, 2*inch, 2*inch)
+    qr_pil.save("temp_qr.png")
+    c.drawImage("temp_qr.png", width/2 - 1*inch, y_pos, 2*inch, 2*inch)
+    y_pos -= 2.3*inch
 
     # Imagen asociada
     imagen_io = BytesIO(imagen_bytes)
     imagen_pil = Image.open(imagen_io)
     imagen_pil.thumbnail((2*inch, 2*inch))
     imagen_pil.save("temp_img.png")
-    c.drawImage("temp_img.png", width/2 - 1*inch, height - 5*inch, 2*inch, 2*inch)
+    c.drawImage("temp_img.png", width/2 - 1*inch, y_pos, 2*inch, 2*inch)
+    y_pos -= 1*inch
 
     # Créditos
     c.setFont("Helvetica", 10)
@@ -57,7 +67,7 @@ def agregar_pagina_qr(pdf_bytes: bytes, qr_url: str, imagen_bytes: bytes) -> byt
     c.showPage()
     c.save()
 
-    # Combinar PDF original con nueva página
+    # Combinar con PDF original
     buffer.seek(0)
     new_pdf = PdfReader(buffer)
     original_pdf = PdfReader(BytesIO(pdf_bytes))
@@ -71,13 +81,15 @@ def agregar_pagina_qr(pdf_bytes: bytes, qr_url: str, imagen_bytes: bytes) -> byt
     output.seek(0)
     return output.read()
 
+
 @app.post("/registrar_pdf/")
 async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
-        # Validar que sea PDF
+        # Validar que sea un PDF
         if pdf.content_type != "application/pdf":
             return JSONResponse(content={"error": "El archivo debe ser un PDF"}, status_code=400)
 
+        # Leer PDF y generar hash
         pdf_bytes = await pdf.read()
         pdf_hash = generate_pdf_hash(pdf_bytes)
 
@@ -100,14 +112,15 @@ async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_d
         })
         db.commit()
 
-        # Crear URL de verificación
-        qr_url = f"https://proyectohashart.up.railway.app/verificar_pdf/"
+        # URL para QR (puedes personalizarla)
+        qr_url = f"https://proyectohashart.up.railway.app/verificar_pdf/?hash={pdf_hash}"
 
-        # Generar PDF con página extra
-        pdf_final = agregar_pagina_qr(pdf_bytes, qr_url, imagen_asociada[1])
+        # Generar PDF con página adicional
+        final_pdf_bytes = agregar_pagina_qr(pdf_bytes, qr_url, imagen_asociada[1])
 
+        # Devolver el PDF como descarga
         return StreamingResponse(
-            BytesIO(pdf_final),
+            BytesIO(final_pdf_bytes),
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename={pdf.filename}"}
         )
