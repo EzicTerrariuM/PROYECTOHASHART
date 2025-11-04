@@ -4,7 +4,7 @@ from backend import models, schemas
 # ------------------------------
 # CRUD para documentos
 # ------------------------------
-a
+
 def crear_documento(db: Session, documento: schemas.DocumentoCreate):
     nuevo = models.Documento(
         nombre=documento.nombre,
