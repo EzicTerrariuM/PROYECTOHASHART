@@ -12,12 +12,13 @@ from PIL import Image
 from backend.utils import generate_pdf_hash
 from backend.database import get_db
 from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
 
+# Dominios permitidos para CORS
 origins = [
-    "http://localhost:3000",  # React local
-    "https://tu-dominio-frontend.com",  # tu frontend en producción
-    "*",  # opcional, permite todos (útil para pruebas)
+    "http://localhost:3000",
+    "https://proyectohashart-front-production.up.railway.app",
 ]
 
 app.add_middleware(
@@ -27,6 +28,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.post("/registrar_pdf/")
 async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -54,77 +56,59 @@ async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_d
         })
         db.commit()
 
-        # Generar QR con la URL de verificación
-        verification_url = f"https://tu-dominio.com/verificar/{pdf_hash}"
-        qr = qrcode.QRCode(box_size=4, border=2)
+        # Generar QR con la URL hacia el frontend de Railway
+        verification_url = f"https://proyectohashart-front-production.up.railway.app/upload?hash={pdf_hash}"
+        qr = qrcode.QRCode(box_size=6, border=2)
         qr.add_data(verification_url)
         qr.make(fit=True)
         qr_img = qr.make_image(fill_color="black", back_color="white")
 
-        # Crear PDF final con página adicional
-        original_pdf = BytesIO(pdf_bytes)
+        # Crear PDF que contiene solo la página con el QR y la imagen
         output_pdf = BytesIO()
-
-        # Página adicional con QR e imagen
         width, height = letter
         c = canvas.Canvas(output_pdf, pagesize=letter)
 
         top_margin = height - inch
-        # Título
-        c.setFont("Helvetica-Bold", 20)
-        c.drawCentredString(width/2, top_margin, "PROYECTO HASHART")
-        # Instrucciones
-        c.setFont("Helvetica", 14)
-        c.drawCentredString(width/2, top_margin - 30, "PARA VERIFICAR TU DOCUMENTO ESCANEA EL CÓDIGO QR")
+        c.setFont("Helvetica-Bold", 22)
+        c.drawCentredString(width / 2, top_margin, "PROYECTO HASHART")
 
-        # QR
-        qr_size = 150
-        qr_x = width/2 - qr_size/2
-        qr_y = top_margin - 200
+        c.setFont("Helvetica", 14)
+        c.drawCentredString(width / 2, top_margin - 30, "Escanea este código QR para verificar tu documento")
+
+        # QR centrado
+        qr_size = 200
+        qr_x = width / 2 - qr_size / 2
+        qr_y = height / 2 - qr_size / 2 + 100
         qr_buffer = BytesIO()
         qr_img.save(qr_buffer, format="PNG")
         qr_buffer.seek(0)
         c.drawInlineImage(Image.open(qr_buffer), qr_x, qr_y, width=qr_size, height=qr_size)
 
-        # Imagen asociada
-        img_x = width/2 - 100
-        img_y = qr_y - 220
+        # Imagen asociada debajo del QR
         imagen = Image.open(BytesIO(imagen_asociada_bytes))
         imagen.thumbnail((200, 200))
-        c.drawInlineImage(imagen, img_x, img_y)
+        img_x = width / 2 - imagen.width / 2
+        img_y = qr_y - imagen.height - 40
+        c.drawInlineImage(imagen, img_x, img_y, width=imagen.width, height=imagen.height)
 
         # Pie de página
         c.setFont("Helvetica-Oblique", 10)
-        c.drawCentredString(width/2, 30, "Proyecto de tesis de la Universidad de San Buenaventura")
-        c.drawCentredString(width/2, 15, "Creado por Juan Campo & Juan Lara")
+        c.drawCentredString(width / 2, 40, "Proyecto de tesis de la Universidad de San Buenaventura")
+        c.drawCentredString(width / 2, 25, "Creado por Juan Campo & Juan Lara")
 
         c.showPage()
         c.save()
 
-        # Combinar PDF original con la página adicional
-        from PyPDF2 import PdfReader, PdfWriter
-
         output_pdf.seek(0)
-        additional_pdf_reader = PdfReader(output_pdf)
-        original_pdf_reader = PdfReader(original_pdf)
-        pdf_writer = PdfWriter()
-
-        for page in original_pdf_reader.pages:
-            pdf_writer.add_page(page)
-        for page in additional_pdf_reader.pages:
-            pdf_writer.add_page(page)
-
-        final_pdf = BytesIO()
-        pdf_writer.write(final_pdf)
-        final_pdf.seek(0)
 
         return StreamingResponse(
-            final_pdf,
+            output_pdf,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={pdf.filename}"}
+            headers={"Content-Disposition": f"attachment; filename=QR_{pdf.filename}"}
         )
 
     except Exception as e:
+        print("Error en registrar_pdf:", e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
@@ -146,7 +130,7 @@ async def verificar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_d
             documento_id = None
             resultado = False
 
-        # Guardar la verificación
+        # Guardar la verificación si el documento existe
         if documento_id:
             insert_verificacion = text(
                 "INSERT INTO verificaciones (documento_id, resultado) VALUES (:documento_id, :resultado)"
@@ -157,4 +141,5 @@ async def verificar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_d
         return JSONResponse(content={"hash": pdf_hash, "valido": resultado})
 
     except Exception as e:
+        print("Error en verificar_pdf:", e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
