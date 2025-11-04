@@ -29,6 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.post("/registrar_pdf/")
 async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
@@ -55,14 +56,14 @@ async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_d
         })
         db.commit()
 
-        # Generar QR con la nueva URL (usa la página /upload del frontend)
+        # Generar QR con la URL hacia el frontend de Railway
         verification_url = f"https://proyectohashart-front-production.up.railway.app/upload?hash={pdf_hash}"
         qr = qrcode.QRCode(box_size=6, border=2)
         qr.add_data(verification_url)
         qr.make(fit=True)
         qr_img = qr.make_image(fill_color="black", back_color="white")
 
-        # Crear PDF que solo contiene la página con el QR
+        # Crear PDF que contiene solo la página con el QR y la imagen
         output_pdf = BytesIO()
         width, height = letter
         c = canvas.Canvas(output_pdf, pagesize=letter)
@@ -70,17 +71,25 @@ async def registrar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_d
         top_margin = height - inch
         c.setFont("Helvetica-Bold", 22)
         c.drawCentredString(width / 2, top_margin, "PROYECTO HASHART")
+
         c.setFont("Helvetica", 14)
         c.drawCentredString(width / 2, top_margin - 30, "Escanea este código QR para verificar tu documento")
 
         # QR centrado
         qr_size = 200
         qr_x = width / 2 - qr_size / 2
-        qr_y = height / 2 - qr_size / 2
+        qr_y = height / 2 - qr_size / 2 + 100
         qr_buffer = BytesIO()
         qr_img.save(qr_buffer, format="PNG")
         qr_buffer.seek(0)
         c.drawInlineImage(Image.open(qr_buffer), qr_x, qr_y, width=qr_size, height=qr_size)
+
+        # Imagen asociada debajo del QR
+        imagen = Image.open(BytesIO(imagen_asociada_bytes))
+        imagen.thumbnail((200, 200))
+        img_x = width / 2 - imagen.width / 2
+        img_y = qr_y - imagen.height - 40
+        c.drawInlineImage(imagen, img_x, img_y, width=imagen.width, height=imagen.height)
 
         # Pie de página
         c.setFont("Helvetica-Oblique", 10)
@@ -121,7 +130,7 @@ async def verificar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_d
             documento_id = None
             resultado = False
 
-        # Guardar la verificación
+        # Guardar la verificación si el documento existe
         if documento_id:
             insert_verificacion = text(
                 "INSERT INTO verificaciones (documento_id, resultado) VALUES (:documento_id, :resultado)"
