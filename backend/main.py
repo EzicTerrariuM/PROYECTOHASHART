@@ -143,3 +143,4 @@ async def verificar_pdf(pdf: UploadFile = File(...), db: Session = Depends(get_d
     except Exception as e:
         print("Error en verificar_pdf:", e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
+    a
